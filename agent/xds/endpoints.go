@@ -157,12 +157,11 @@ func (s *Server) endpointsFromSnapshotMeshGateway(cfgSnap *proxycfg.ConfigSnapsh
 	for _, dc := range datacenters {
 		endpoints, ok := cfgSnap.MeshGateway.GatewayGroups[dc]
 		if !ok {
-			fedState, ok := cfgSnap.MeshGateway.FederationStates[dc]
+			endpoints, ok = cfgSnap.MeshGateway.FedStateGateways[dc]
 			if !ok { // not possible
 				s.Logger.Printf("[ERR] xds: skipping mesh gateway endpoints in dc %q because no definition found", dc)
 				continue
 			}
-			endpoints = fedState.MeshGateways
 		}
 
 		{ // standard connect

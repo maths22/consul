@@ -79,6 +79,7 @@ func init() {
 	registerEndpoint("/v1/coordinate/node/", []string{"GET"}, (*HTTPServer).CoordinateNode)
 	registerEndpoint("/v1/coordinate/update", []string{"PUT"}, (*HTTPServer).CoordinateUpdate)
 	registerEndpoint("/v1/internal/federation-states", []string{"GET"}, (*HTTPServer).FederationStateList)
+	registerEndpoint("/v1/internal/federation-states/mesh-gateways", []string{"GET"}, (*HTTPServer).FederationStateListMeshGateways)
 	registerEndpoint("/v1/internal/federation-state/", []string{"GET"}, (*HTTPServer).FederationStateGet)
 	registerEndpoint("/v1/discovery-chain/", []string{"GET", "POST"}, (*HTTPServer).DiscoveryChainRead)
 	registerEndpoint("/v1/event/fire/", []string{"PUT"}, (*HTTPServer).EventFire)

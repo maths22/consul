@@ -22,19 +22,19 @@ type CacheNotifier interface {
 }
 
 const (
-	coalesceTimeout                  = 200 * time.Millisecond
-	rootsWatchID                     = "roots"
-	leafWatchID                      = "leaf"
-	intentionsWatchID                = "intentions"
-	serviceListWatchID               = "service-list"
-	federationStateListWatchID       = "federation-state-list"
-	consulServerListWatchID          = "consul-server-list"
-	datacentersWatchID               = "datacenters"
-	serviceResolversWatchID          = "service-resolvers"
-	svcChecksWatchIDPrefix           = cachetype.ServiceHTTPChecksName + ":"
-	serviceIDPrefix                  = string(structs.UpstreamDestTypeService) + ":"
-	preparedQueryIDPrefix            = string(structs.UpstreamDestTypePreparedQuery) + ":"
-	defaultPreparedQueryPollInterval = 30 * time.Second
+	coalesceTimeout                    = 200 * time.Millisecond
+	rootsWatchID                       = "roots"
+	leafWatchID                        = "leaf"
+	intentionsWatchID                  = "intentions"
+	serviceListWatchID                 = "service-list"
+	federationStateListGatewaysWatchID = "federation-state-list-mesh-gateways"
+	consulServerListWatchID            = "consul-server-list"
+	datacentersWatchID                 = "datacenters"
+	serviceResolversWatchID            = "service-resolvers"
+	svcChecksWatchIDPrefix             = cachetype.ServiceHTTPChecksName + ":"
+	serviceIDPrefix                    = string(structs.UpstreamDestTypeService) + ":"
+	preparedQueryIDPrefix              = string(structs.UpstreamDestTypePreparedQuery) + ":"
+	defaultPreparedQueryPollInterval   = 30 * time.Second
 )
 
 // state holds all the state needed to maintain the config for a registered
@@ -343,11 +343,11 @@ func (s *state) initWatchesMeshGateway() error {
 		// TODO(wanfed): conveniently we can just use this attribute in one
 		// place here to set the machinery in motion and leave the conditional
 		// behavior out of the rest
-		err = s.cache.Notify(s.ctx, cachetype.FederationStateName, &structs.DCSpecificRequest{
+		err = s.cache.Notify(s.ctx, cachetype.FederationStateListMeshGatewaysName, &structs.DCSpecificRequest{
 			Datacenter:   s.source.Datacenter,
 			QueryOptions: structs.QueryOptions{Token: s.token},
 			Source:       *s.source,
-		}, federationStateListWatchID, s.ch)
+		}, federationStateListGatewaysWatchID, s.ch)
 		if err != nil {
 			return err
 		}
@@ -732,17 +732,12 @@ func (s *state) handleUpdateMeshGateway(u cache.UpdateEvent, snap *ConfigSnapsho
 			return fmt.Errorf("invalid type for response: %T", u.Result)
 		}
 		snap.Roots = roots
-	case federationStateListWatchID:
-		indexedStates, ok := u.Result.(*structs.IndexedFederationStates)
+	case federationStateListGatewaysWatchID:
+		dcIndexedNodes, ok := u.Result.(*structs.DatacenterIndexedCheckServiceNodes)
 		if !ok {
 			return fmt.Errorf("invalid type for response: %T", u.Result)
 		}
-
-		m := make(map[string]*structs.FederationState)
-		for _, fedState := range indexedStates.States {
-			m[fedState.Datacenter] = fedState
-		}
-		snap.MeshGateway.FederationStates = m
+		snap.MeshGateway.FedStateGateways = dcIndexedNodes.DatacenterNodes
 	case serviceListWatchID:
 		services, ok := u.Result.(*structs.IndexedServices)
 		if !ok {

@@ -8,14 +8,14 @@ import (
 )
 
 // Recommended name for registration.
-const FederationStateName = "federation-state"
+const FederationStateListMeshGatewaysName = "federation-state-list-mesh-gateways"
 
 // FederationState supports fetching federation states.
-type FederationState struct {
+type FederationStateListMeshGateways struct {
 	RPC RPC
 }
 
-func (c *FederationState) Fetch(opts cache.FetchOptions, req cache.Request) (cache.FetchResult, error) {
+func (c *FederationStateListMeshGateways) Fetch(opts cache.FetchOptions, req cache.Request) (cache.FetchResult, error) {
 	var result cache.FetchResult
 
 	// The request should be a DCSpecificRequest.
@@ -40,8 +40,8 @@ func (c *FederationState) Fetch(opts cache.FetchOptions, req cache.Request) (cac
 	reqReal.AllowStale = true
 
 	// Fetch
-	var reply structs.IndexedFederationStates
-	if err := c.RPC.RPC("FederationState.List", reqReal, &reply); err != nil {
+	var reply structs.DatacenterIndexedCheckServiceNodes
+	if err := c.RPC.RPC("FederationState.ListMeshGateways", reqReal, &reply); err != nil {
 		return result, err
 	}
 
@@ -50,6 +50,6 @@ func (c *FederationState) Fetch(opts cache.FetchOptions, req cache.Request) (cac
 	return result, nil
 }
 
-func (c *FederationState) SupportsBlocking() bool {
+func (c *FederationStateListMeshGateways) SupportsBlocking() bool {
 	return true
 }

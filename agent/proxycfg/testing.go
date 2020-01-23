@@ -1025,12 +1025,8 @@ func testConfigSnapshotMeshGateway(t testing.T, populateServices bool, useFedera
 			},
 		}
 		if useFederationStates {
-			snap.MeshGateway.FederationStates = map[string]*structs.FederationState{
-				"dc2": &structs.FederationState{
-					Datacenter:   "dc2",
-					UpdatedAt:    time.Now().UTC(),
-					MeshGateways: TestGatewayNodesDC2(t),
-				},
+			snap.MeshGateway.FedStateGateways = map[string]structs.CheckServiceNodes{
+				"dc2": TestGatewayNodesDC2(t),
 			}
 
 			delete(snap.MeshGateway.GatewayGroups, "dc2")

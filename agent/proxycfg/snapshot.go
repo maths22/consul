@@ -40,12 +40,12 @@ type configSnapshotMeshGateway struct {
 	ServiceGroups      map[string]structs.CheckServiceNodes
 	ServiceResolvers   map[string]*structs.ServiceResolverConfigEntry
 	GatewayGroups      map[string]structs.CheckServiceNodes
-	FederationStates   map[string]*structs.FederationState
+	FedStateGateways   map[string]structs.CheckServiceNodes
 	ConsulServers      structs.CheckServiceNodes
 }
 
 func (c *configSnapshotMeshGateway) Datacenters() []string {
-	sz1, sz2 := len(c.GatewayGroups), len(c.FederationStates)
+	sz1, sz2 := len(c.GatewayGroups), len(c.FedStateGateways)
 
 	sz := sz1
 	if sz2 > sz1 {
@@ -56,7 +56,7 @@ func (c *configSnapshotMeshGateway) Datacenters() []string {
 	for dc, _ := range c.GatewayGroups {
 		dcs = append(dcs, dc)
 	}
-	for dc, _ := range c.FederationStates {
+	for dc, _ := range c.FedStateGateways {
 		if _, ok := c.GatewayGroups[dc]; !ok {
 			dcs = append(dcs, dc)
 		}
@@ -74,7 +74,7 @@ func (c *configSnapshotMeshGateway) IsEmpty() bool {
 		len(c.ServiceGroups) == 0 &&
 		len(c.ServiceResolvers) == 0 &&
 		len(c.GatewayGroups) == 0 &&
-		len(c.FederationStates) == 0 &&
+		len(c.FedStateGateways) == 0 &&
 		len(c.ConsulServers) == 0
 }
 

@@ -57,3 +57,32 @@ func (s *HTTPServer) FederationStateList(resp http.ResponseWriter, req *http.Req
 
 	return out.States, nil
 }
+
+func (s *HTTPServer) FederationStateListMeshGateways(resp http.ResponseWriter, req *http.Request) (interface{}, error) {
+	var args structs.DCSpecificRequest
+	if done := s.parse(resp, req, &args.Datacenter, &args.QueryOptions); done {
+		return nil, nil
+	}
+
+	if args.Datacenter == "" {
+		args.Datacenter = s.agent.config.Datacenter
+	}
+
+	var out structs.DatacenterIndexedCheckServiceNodes
+	defer setMeta(resp, &out.QueryMeta)
+	if err := s.agent.RPC("FederationState.ListMeshGateways", &args, &out); err != nil {
+		return nil, err
+	}
+
+	// make sure we return a arrays and not nils
+	if out.DatacenterNodes == nil {
+		out.DatacenterNodes = make(map[string]structs.CheckServiceNodes)
+	}
+	for dc, nodes := range out.DatacenterNodes {
+		if nodes == nil {
+			out.DatacenterNodes[dc] = make(structs.CheckServiceNodes, 0)
+		}
+	}
+
+	return out.DatacenterNodes, nil
+}

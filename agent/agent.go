@@ -4095,7 +4095,7 @@ func (a *Agent) registerCache() {
 		RefreshTimeout: 10 * time.Minute,
 	})
 
-	a.cache.RegisterType(cachetype.FederationStateName, &cachetype.FederationState{
+	a.cache.RegisterType(cachetype.FederationStateListMeshGatewaysName, &cachetype.FederationStateListMeshGateways{
 		RPC: a,
 	}, &cache.RegisterOptions{
 		Refresh:        true,

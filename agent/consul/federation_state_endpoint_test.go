@@ -340,17 +340,36 @@ func TestFederationState_List(t *testing.T) {
 	federationStateUpsert(t, codec, "", expected.States[0])
 	federationStateUpsert(t, codec, "", expected.States[1])
 
-	args := structs.FederationStateQuery{
-		Datacenter: "dc1",
-	}
-	var out structs.IndexedFederationStates
-	require.NoError(t, msgpackrpc.CallWithCodec(codec, "FederationState.List", &args, &out))
-
-	for i, _ := range out.States {
-		zeroFedStateIndexes(t, out.States[i])
+	// we'll also test the other list endpoint at the same time since the setup is nearly the same
+	expectedMeshGateways := structs.DatacenterIndexedCheckServiceNodes{
+		DatacenterNodes: map[string]structs.CheckServiceNodes{
+			"dc1": expected.States[0].MeshGateways,
+			"dc2": expected.States[1].MeshGateways,
+		},
 	}
 
-	require.Equal(t, expected.States, out.States)
+	t.Run("List", func(t *testing.T) {
+		args := structs.DCSpecificRequest{
+			Datacenter: "dc1",
+		}
+		var out structs.IndexedFederationStates
+		require.NoError(t, msgpackrpc.CallWithCodec(codec, "FederationState.List", &args, &out))
+
+		for i, _ := range out.States {
+			zeroFedStateIndexes(t, out.States[i])
+		}
+
+		require.Equal(t, expected.States, out.States)
+	})
+	t.Run("ListMeshGateways", func(t *testing.T) {
+		args := structs.DCSpecificRequest{
+			Datacenter: "dc1",
+		}
+		var out structs.DatacenterIndexedCheckServiceNodes
+		require.NoError(t, msgpackrpc.CallWithCodec(codec, "FederationState.ListMeshGateways", &args, &out))
+
+		require.Equal(t, expectedMeshGateways.DatacenterNodes, out.DatacenterNodes)
+	})
 }
 
 func TestFederationState_List_ACLDeny(t *testing.T) {
@@ -364,6 +383,7 @@ func TestFederationState_List_ACLDeny(t *testing.T) {
 		c.ACLsEnabled = true
 		c.ACLMasterToken = "root"
 		c.ACLDefaultPolicy = "deny"
+		c.ACLEnforceVersion8 = true // apparently this is still not defaulted to true in server code
 	})
 	defer os.RemoveAll(dir1)
 	defer s1.Shutdown()
@@ -380,6 +400,7 @@ func TestFederationState_List_ACLDeny(t *testing.T) {
 		c.ACLsEnabled = true
 		c.ACLMasterToken = "root"
 		c.ACLDefaultPolicy = "deny"
+		c.ACLEnforceVersion8 = true // ugh
 	})
 	defer os.RemoveAll(dir2)
 	defer s2.Shutdown()
@@ -392,12 +413,24 @@ func TestFederationState_List_ACLDeny(t *testing.T) {
 	testrpc.WaitForLeader(t, s2.RPC, "dc1")
 
 	// Create the ACL tokens
-	nadaToken, err := upsertTestTokenWithPolicyRules(codec, "root", "dc1", `
-	service "foo" { policy = "write" }`)
+	nadaToken, err := upsertTestTokenWithPolicyRules(codec, "root", "dc1", ` `)
 	require.NoError(t, err)
 
 	opReadToken, err := upsertTestTokenWithPolicyRules(codec, "root", "dc1", `
 	operator = "read"`)
+	require.NoError(t, err)
+
+	svcReadToken, err := upsertTestTokenWithPolicyRules(codec, "root", "dc1", `
+	service_prefix "" { policy = "read" }`)
+	require.NoError(t, err)
+
+	nodeReadToken, err := upsertTestTokenWithPolicyRules(codec, "root", "dc1", `
+	node_prefix "" { policy = "read" }`)
+	require.NoError(t, err)
+
+	svcAndNodeReadToken, err := upsertTestTokenWithPolicyRules(codec, "root", "dc1", `
+	service_prefix "" { policy = "read" }
+	node_prefix "" { policy = "read" }`)
 	require.NoError(t, err)
 
 	// create some dummy data
@@ -432,31 +465,97 @@ func TestFederationState_List_ACLDeny(t *testing.T) {
 	federationStateUpsert(t, codec, "root", expected.States[0])
 	federationStateUpsert(t, codec, "root", expected.States[1])
 
-	{ // This should not work
-		args := structs.FederationStateQuery{
-			Datacenter:   "dc1",
-			QueryOptions: structs.QueryOptions{Token: nadaToken.SecretID},
-		}
-		var out structs.IndexedFederationStates
-		err := msgpackrpc.CallWithCodec(codec, "FederationState.List", &args, &out)
-		if !acl.IsErrPermissionDenied(err) {
-			t.Fatalf("err: %v", err)
-		}
+	// we'll also test the other list endpoint at the same time since the setup is nearly the same
+	expectedMeshGateways := structs.DatacenterIndexedCheckServiceNodes{
+		DatacenterNodes: map[string]structs.CheckServiceNodes{
+			"dc1": expected.States[0].MeshGateways,
+			"dc2": expected.States[1].MeshGateways,
+		},
 	}
 
-	{ // This should work
-		args := structs.FederationStateQuery{
-			Datacenter:   "dc1",
-			QueryOptions: structs.QueryOptions{Token: opReadToken.SecretID},
-		}
-		var out structs.IndexedFederationStates
-		require.NoError(t, msgpackrpc.CallWithCodec(codec, "FederationState.List", &args, &out))
+	type tcase struct {
+		token string
 
-		for i, _ := range out.States {
-			zeroFedStateIndexes(t, out.States[i])
-		}
+		listDenied  bool
+		listEmpty   bool
+		gwListEmpty bool
+	}
 
-		require.Equal(t, expected.States, out.States)
+	cases := map[string]tcase{
+		"no perms": tcase{
+			token:       nadaToken.SecretID,
+			listDenied:  true,
+			gwListEmpty: true,
+		},
+		"service:read": tcase{
+			token:       svcReadToken.SecretID,
+			listDenied:  true,
+			gwListEmpty: true,
+		},
+		"node:read": tcase{
+			token:       nodeReadToken.SecretID,
+			listDenied:  true,
+			gwListEmpty: true,
+		},
+		"service:read and node:read": tcase{
+			token:      svcAndNodeReadToken.SecretID,
+			listDenied: true,
+		},
+		"operator:read": tcase{
+			token:       opReadToken.SecretID,
+			gwListEmpty: true,
+		},
+		"master token": tcase{
+			token: "root",
+		},
+	}
+
+	for name, tc := range cases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Run("List", func(t *testing.T) {
+				args := structs.DCSpecificRequest{
+					Datacenter:   "dc1",
+					QueryOptions: structs.QueryOptions{Token: tc.token},
+				}
+				var out structs.IndexedFederationStates
+				err := msgpackrpc.CallWithCodec(codec, "FederationState.List", &args, &out)
+
+				if tc.listDenied {
+					if !acl.IsErrPermissionDenied(err) {
+						t.Fatalf("err: %v", err)
+					}
+				} else if tc.listEmpty {
+					require.NoError(t, err)
+					require.Len(t, out.States, 0)
+				} else {
+					require.NoError(t, err)
+
+					for i, _ := range out.States {
+						zeroFedStateIndexes(t, out.States[i])
+					}
+
+					require.Equal(t, expected.States, out.States)
+				}
+			})
+
+			t.Run("ListMeshGateways", func(t *testing.T) {
+				args := structs.DCSpecificRequest{
+					Datacenter:   "dc1",
+					QueryOptions: structs.QueryOptions{Token: tc.token},
+				}
+				var out structs.DatacenterIndexedCheckServiceNodes
+				err := msgpackrpc.CallWithCodec(codec, "FederationState.ListMeshGateways", &args, &out)
+
+				if tc.gwListEmpty {
+					require.NoError(t, err)
+					require.Len(t, out.DatacenterNodes, 0)
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, expectedMeshGateways.DatacenterNodes, out.DatacenterNodes)
+				}
+			})
+		})
 	}
 }
 
