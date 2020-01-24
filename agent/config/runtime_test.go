@@ -619,8 +619,12 @@ func TestConfigFlagsAndEdgecases(t *testing.T) {
 				`-primary-gateways=b`,
 				`-data-dir=` + dataDir,
 			},
+			json: []string{`{ "primary_datacenter": "dc1" }`},
+			hcl:  []string{`primary_datacenter = "dc1"`},
 			patch: func(rt *RuntimeConfig) {
 				rt.Datacenter = "dc2"
+				rt.PrimaryDatacenter = "dc1"
+				rt.ACLDatacenter = "dc1"
 				rt.PrimaryGateways = []string{"a", "b"}
 				rt.DataDir = dataDir
 				// server things
